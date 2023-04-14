@@ -8,7 +8,7 @@ from CallConfiguration import CallConfiguration
 from Ngrok.NgrokService import NgrokService
 from azure.communication.identity import CommunicationIdentityClient
 from azure.cognitiveservices.speech import AudioDataStream, SpeechConfig, SpeechSynthesizer, SpeechSynthesisOutputFormat
-from OutboundCallReminder import OutboundCallReminder
+from callautomation import OutboundCallReminder
 
 
 class Program():
