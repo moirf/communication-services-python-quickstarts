@@ -9,25 +9,15 @@ from CallConfiguration import CallConfiguration
 from ConfigurationManager import ConfigurationManager
 from Logger import Logger
 from CommunicationIdentifierKind import CommunicationIdentifierKind
-from EventHandler.EventDispatcher import EventDispatcher
 from azure.communication.identity import CommunicationUserIdentifier
 from azure.communication.chat import PhoneNumberIdentifier
 from azure.communication.callautomation import CallInvite,CreateCallResult,CallConnected,\
-     CallConnectionClient,PlayCompleted,AddParticipantResponse,DtmfTone,CallAutomationClient,\
-         CallMediaClient,CallMediaRecognizeOptions,CallAutomationEventParser,\
-             CallMediaRecognizeDtmfOptions,CallConnectionProperties,\
-                 CallParticipant,CallDisconnected,CallRejectReason,RecognizeCompleted,RecognizeFailed,\
-                     StartRecordingOptions,RecordingStateResponse,PlaySource,FileSource,MediaStreamingConfiguration,\
-                         
-                     
-                     
-# from azure.communication.callingserver import CallingServerClient, \
-#     CallConnection, CallConnectionStateChangedEvent, ToneReceivedEvent, \
-#     ToneInfo, PlayAudioResultEvent, AddParticipantResultEvent, CallMediaType, \
-#     CallingEventSubscriptionType, CreateCallOptions, CallConnectionState, \
-#     CallingOperationStatus, ToneValue, PlayAudioOptions, CallingServerEventType, \
-#     PlayAudioResult, AddParticipantResult
-
+CallConnectionClient,PlayCompleted,AddParticipantResponse,DtmfTone,CallAutomationClient,\
+CallMediaClient,CallMediaRecognizeOptions,CallAutomationEventParser,\
+CallMediaRecognizeDtmfOptions,CallConnectionProperties,\
+CallParticipant,CallDisconnected,CallRejectReason,RecognizeCompleted,RecognizeFailed,\
+StartRecordingOptions,RecordingStateResponse,PlaySource,FileSource
+ 
 PLAY_AUDIO_AWAIT_TIMER = 30
 ADD_PARTICIPANT_AWAIT_TIMER = 60
 
@@ -194,26 +184,26 @@ class AppointmentCallReminder:
                                ", Id: " + play_audio_response.operation_id + ", OperationContext: " + play_audio_response.operation_context + ", OperationStatus: " +
                                play_audio_response.status)
 
-            if (play_audio_response.status == CallingOperationStatus.RUNNING):
-                Logger.log_message(
-                    Logger.INFORMATION, "Play Audio state -- > " + str(CallingOperationStatus.RUNNING))
+            # if (play_audio_response.status == CallingOperationStatus.RUNNING):
+            #     Logger.log_message(
+            #         Logger.INFORMATION, "Play Audio state -- > " + str(CallingOperationStatus.RUNNING))
 
                 # listen to play audio events
-                self.register_to_play_audio_result_event(
-                    play_audio_response.operation_context)
+                # self.register_to_play_audio_result_event(
+                #     play_audio_response.operation_context)
 
-                tasks = []
-                tasks.append(self.play_audio_completed_task)
-                tasks.append(asyncio.create_task(
-                    asyncio.sleep(PLAY_AUDIO_AWAIT_TIMER)))
+                # tasks = []
+                # tasks.append(self.play_audio_completed_task)
+                # tasks.append(asyncio.create_task(
+                #     asyncio.sleep(PLAY_AUDIO_AWAIT_TIMER)))
 
-                await asyncio.wait(tasks, return_when=FIRST_COMPLETED)
+                # await asyncio.wait(tasks, return_when=FIRST_COMPLETED)
 
-                if(not self.play_audio_completed_task.done()):
-                    Logger.log_message(
-                        Logger.INFORMATION, "No response from user in 30 sec, initiating hangup")
-                    self.play_audio_completed_task.set_result(False)
-                    self.tone_received_complete_task.set_result(False)
+                # if(not self.play_audio_completed_task.done()):
+                #     Logger.log_message(
+                #         Logger.INFORMATION, "No response from user in 30 sec, initiating hangup")
+                #     self.play_audio_completed_task.set_result(False)
+                #     self.tone_received_complete_task.set_result(False)
 
         except Exception as ex:
             if (self.play_audio_completed_task.cancelled()):
@@ -228,22 +218,20 @@ class AppointmentCallReminder:
 
         self.call_connection.hang_up()
 
-    def register_to_play_audio_result_event(self, operation_context):
-        def play_prompt_response_notification(call_event):
-            play_audio_result_event: PlayAudioResultEvent = call_event
-            Logger.log_message(
-                Logger.INFORMATION, "Play audio status -- > " + str(play_audio_result_event.status))
+    # def register_to_play_audio_result_event(self, operation_context):
+    #     def play_prompt_response_notification(call_event):
+    #         play_audio_result_event: PlayAudioResultEvent = call_event
+    #         Logger.log_message(
+    #             Logger.INFORMATION, "Play audio status -- > " + str(play_audio_result_event.status))
 
-            if (play_audio_result_event.status == CallingOperationStatus.COMPLETED):
-                EventDispatcher.get_instance().unsubscribe(
-                    CallingServerEventType.PLAY_AUDIO_RESULT_EVENT, operation_context)
-                self.play_audio_completed_task.set_result(True)
-            elif (play_audio_result_event.status == CallingOperationStatus.FAILED):
-                self.play_audio_completed_task.set_result(False)
+    #         if (play_audio_result_event.status == CallingOperationStatus.COMPLETED):
+    #             EventDispatcher.get_instance().unsubscribe(
+    #                 CallingServerEventType.PLAY_AUDIO_RESULT_EVENT, operation_context)
+    #             self.play_audio_completed_task.set_result(True)
+    #         elif (play_audio_result_event.status == CallingOperationStatus.FAILED):
+    #             self.play_audio_completed_task.set_result(False)
 
-        # Subscribe to event
-        EventDispatcher.get_instance().subscribe(CallingServerEventType.PLAY_AUDIO_RESULT_EVENT,
-                                                 operation_context, play_prompt_response_notification)
+       
 
     async def retry_add_participant_async(self, addedParticipant):
         retry_attempt_count: int = 1
@@ -289,7 +277,7 @@ class AppointmentCallReminder:
             alternate_caller_id = PhoneNumberIdentifier(
                 value=str(ConfigurationManager.get_instance().get_app_settings("SourcePhone")))
 
-            add_participant_response: AddParticipantResult = self.call_connection.add_participant(participant=participant,
+            add_participant_response: AddParticipantResponse = self.call_connection.add_participant(participant=participant,
                                                                                                   alternate_caller_id=alternate_caller_id, operation_context=operation_context)
             Logger.log_message(
             Logger.INFORMATION, "addParticipantWithResponse -- > " + add_participant_response.additional_properties.get("operationId"))
@@ -303,24 +291,22 @@ class AppointmentCallReminder:
 
         self.add_participant_complete_task = asyncio.Future()
 
-        def add_participant_received_event(call_event):
-            add_participants_updated_event: AddParticipantResultEvent = call_event
-            operation_status: CallingOperationStatus = add_participants_updated_event.status
-            if (operation_status == CallingOperationStatus.COMPLETED):
-                Logger.log_message(
-                    Logger.INFORMATION, "Add participant status -- > " + operation_status)
-                self.add_participant_complete_task.set_result(True)
-            elif(operation_status == CallingOperationStatus.FAILED):
-                Logger.log_message(
-                    Logger.INFORMATION, "Add participant status -- > " + operation_status)
-                self.add_participant_complete_task.set_result(False)
+        # def add_participant_received_event(call_event):
+        #     add_participants_updated_event: AddParticipantResponse = call_event
+        #     operation_status: CallingOperationStatus = add_participants_updated_event.operation_context
+        #     if (operation_status == CallingOperationStatus.COMPLETED):
+        #         Logger.log_message(
+        #             Logger.INFORMATION, "Add participant status -- > " + operation_status)
+        #         self.add_participant_complete_task.set_result(True)
+        #     elif(operation_status == CallingOperationStatus.FAILED):
+        #         Logger.log_message(
+        #             Logger.INFORMATION, "Add participant status -- > " + operation_status)
+        #         self.add_participant_complete_task.set_result(False)
 
-            EventDispatcher.get_instance().unsubscribe(
-                CallingServerEventType.ADD_PARTICIPANT_RESULT_EVENT, operation_context)
+        #     EventDispatcher.get_instance().unsubscribe(
+        #         CallingServerEventType.ADD_PARTICIPANT_RESULT_EVENT, operation_context)
 
-        # Subscribe to event
-        EventDispatcher.get_instance().subscribe(CallingServerEventType.ADD_PARTICIPANT_RESULT_EVENT,
-                                                 operation_context, add_participant_received_event)
+        
 
     def get_identifier_kind(self, participantnumber: str):
         # checks the identity type returns as string

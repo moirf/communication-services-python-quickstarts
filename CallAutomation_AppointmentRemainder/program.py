@@ -1,22 +1,10 @@
-# import asyncio
-# import nest_asyncio
-# from azure.communication.identity._shared.models import CommunicationIdentifier, CommunicationUserIdentifier
-# from Controller.OutboundCallController import OutboundCallController
-# from Logger import Logger
-# from ConfigurationManager import ConfigurationManager
-# from CallConfiguration import CallConfiguration
-# from Ngrok.NgrokService import NgrokService
-# from azure.communication.identity import CommunicationIdentityClient
-# from azure.cognitiveservices.speech import AudioDataStream, SpeechConfig, SpeechSynthesizer, SpeechSynthesisOutputFormat
-# from callautomation import OutboundCallReminder
-
 import asyncio
 import nest_asyncio
 import azure
 import azure.communication
 import azure.communication.callautomation
 from azure.core.messaging import CloudEvent
-from CallAutomation_AppointmentRemainder import CallAutomation_AppointmentRemainder
+#from CallAutomation_AppointmentRemainder import CallAutomation_AppointmentRemainder
 from azure.communication.identity._shared.models import CommunicationIdentifier, CommunicationUserIdentifier
 from azure.cognitiveservices.speech import AudioDataStream, SpeechConfig, SpeechSynthesizer, SpeechSynthesisOutputFormat
 import json
@@ -26,10 +14,10 @@ from ConfigurationManager import ConfigurationManager
 from CallConfiguration import CallConfiguration
 from Ngrok.NgrokService import NgrokService
 from azure.communication.identity import CommunicationIdentityClient
+from AppointmentCallReminder import AppointmentCallReminder
 
 
-class Program():
-    builder = web.create
+class Program():    
     configuration_manager = None
     __ngrok_service = None
     url = "http://localhost:9007"
@@ -170,8 +158,7 @@ if __name__ == "__main__":
     
     
     def CallUri():
-     app = web.Application()
-     builder = webapplication.ConfigParser(defaults=None, dict_type=collections.OrderedDict, allow_no_value=False, delimiters=, '=', ':')
+     app = web.Application()    
 
     def __init__(self):
         self.app.add_routes(
