@@ -37,17 +37,15 @@ class Program():
     url = "http://localhost:8080"
     target = None
     
-    async def start_callBbak(request):
-        try:
-             #param = request.rel_url.query
-             param = request.call_connection_Response
-             #content = await request.content.read()
-             content = await request.
-             #event = CloudEvent.from_dict(json.loads(contant)[0])
-             event = CallAutomationEventParser.parse(param)
-             call_Connection = CallAutomationClient.from_connection_string(event.call_Connection.call_connection_id)            
+    async def start_callBack(self,request):
+        try: 
+             content = await request.content.read()             
+             #param=CloudEvent.from_dict(json.loads(str(content.decode('UTF-8'))[0]))            
+             event = CallAutomationEventParser.parse(content)
+             call_connection_id = event.call_connection_id
+             call_Connection = CallAutomationClient.get_call_connection(self,call_connection_id)            
              call_Connection_Media =call_Connection._call_media            
-             if event.type == CallConnected:
+             if event.kind == CallConnected:
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
                                  + event.call_connection_id)
              # recognize_Options=CallMediaRecognizeDtmfOptions(CommunicationIdentifier.raw_id(target))
@@ -55,30 +53,32 @@ class Program():
           
         except Exception as ex:
             Logger.log_message(
-                Logger.ERROR, "Failed to start server recording --> " + str(ex))
+                Logger.ERROR, "Failed to start Audio --> " + str(ex))
             
           
 
     def __init__(self):
         Logger.log_message(Logger.INFORMATION, "Starting ACS Sample App ")
         # Get configuration properties
+        app = web.Application() 
         self.configuration_manager = ConfigurationManager.get_instance()        
         self.max_retry_attempt_count: int = int(ConfigurationManager.get_instance().get_app_settings("MaxRetryCount"))
         self.calling_Automation_client = CallAutomationClient.from_connection_string(self.configuration_manager.get_app_settings("Connectionstring"))
         self.app.add_routes([web.post('/api/call',(self.on_incoming_request_async))])
         self.app.add_routes([web.get("/audio/{file_name}", self.load_file)])
-        self.app.add_routes([web.post('/api/callbacks',self.start_callBbak)])
+        self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
 
     async def program(self):
         # Start Ngrok service
-        ngrok_url = self.start_ngrok_service()
-        #ngrok_url = "https://61a5-103-70-129-182.ngrok.io"
+        
+        ngrok_url =self.configuration_manager.get_app_settings("AppBaseUri")
         try:
             if (ngrok_url and len(ngrok_url)):
                 Logger.log_message(Logger.INFORMATION,"Server started at -- > " + self.url)
                 run_sample = asyncio.create_task(self.run_sample(ngrok_url)) 
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(self.start_callBbak())
+                # loop = asyncio.get_event_loop()
+                # loop.run_until_complete(self.start_callBack())
+                web.run_app(self.app, port=58963)
                 await run_sample               
                 
 
@@ -89,34 +89,6 @@ class Program():
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, "Failed to start Ngrok service --> "+str(ex))
-
-        Logger.log_message(Logger.INFORMATION,
-                           "Press 'Ctrl + C' to exit the sample")
-        self.__ngrok_service.dispose()
-
-    def start_ngrok_service(self):
-        try:
-           ngrokPath = self.configuration_manager.get_app_settings("NgrokExePath")
-
-           if (not(len(ngrokPath))):
-                  Logger.log_message(Logger.INFORMATION,
-                                   "Ngrok path not provided")
-                  return None
- 
-           Logger.log_message(Logger.INFORMATION, "Starting Ngrok")
-           self.__ngrok_service = NgrokService(ngrokPath, None)
-
-           Logger.log_message(Logger.INFORMATION, "Fetching Ngrok Url")
-           ngrok_url = self.__ngrok_service.get_ngrok_url()
-           ngrok_url  = self.configuration_manager.get_app_settings("AppBaseUri")        
-           Logger.log_message(Logger.INFORMATION,
-                               "Ngrok Started with url -- > " + ngrok_url)
-           return ngrok_url
-
-        except Exception as ex:
-            Logger.log_message(Logger.INFORMATION,
-                               "Ngrok service got failed -- > " + str(ex))
-            return None
 
     async def run_sample(self, app_base_url):
         call_configuration = self.initiate_configuration(app_base_url)
@@ -131,9 +103,7 @@ class Program():
                self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=call_configuration.app_callback_url)                
                Logger.log_message(
                 Logger.INFORMATION, "Call initiated with Call Leg id -- >" + self.call_connection_Response.call_connection.call_connection_id)
-            # self.register_to_callstate_change_event(self.call_connection.call_connection_id)
-
-            # await self.call_connected_task
+           
 
         except Exception as ex:
             Logger.log_message(
@@ -152,53 +122,20 @@ class Program():
 
     def initiate_configuration(self, app_base_url):
         try:
-            connection_string = self.configuration_manager.get_app_settings(
-                "Connectionstring")
-            source_phone_number = self.configuration_manager.get_app_settings(
-                "SourcePhone")
-
+            connection_string = self.configuration_manager.get_app_settings("Connectionstring")
+            source_phone_number = self.configuration_manager.get_app_settings("SourcePhone")
+            Event_CallBack_Route=self.configuration_manager.get_app_settings("EventCallBackRoute")
             source_identity = self.create_user(connection_string)
-            audio_file_name = self.generate_custom_audio_message()
+            audio_file_name = self.configuration_manager.get_app_settings("AppointmentReminderMenuAudio")
 
-            return CallConfiguration(connection_string, source_identity, source_phone_number, app_base_url, audio_file_name)
+            return CallConfiguration(connection_string, source_identity, source_phone_number, app_base_url, audio_file_name,Event_CallBack_Route)
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, "Failed to CallConfiguration. Exception -- > " + str(ex))
     # <summary>
     # Get .wav Audio file
     # </summary>
-
-    def generate_custom_audio_message(self):
-        configuration_manager = ConfigurationManager()
-        key = configuration_manager.get_app_settings("CognitiveServiceKey")
-        region = configuration_manager.get_app_settings(
-            "CognitiveServiceRegion")
-        custom_message = configuration_manager.get_app_settings(
-            "CustomMessage")
-
-        try:
-            if (key and len(key) and region and len(region) and custom_message and len(custom_message)):
-
-                config = SpeechConfig(subscription=key, region=region)
-                config.set_speech_synthesis_output_format(
-                    SpeechSynthesisOutputFormat["Riff24Khz16BitMonoPcm"])
-
-                synthesizer = SpeechSynthesizer(SpeechSynthesizer=config)
-
-                result = synthesizer.speak_text_async(custom_message).get()
-                stream = AudioDataStream(result)
-                stream.save_to_wav_file("/audio/custom-message.wav")
-
-                return "custom-message.wav"
-
-            return "sample-message.wav"
-        except Exception as ex:
-            Logger.log_message(
-                Logger.ERROR, "Exception while generating text to speech, falling back to sample audio. Exception -- > " + str(ex))
-            return "sample-message.wav"
-
-
-
+    
     async def on_incoming_request_async(self, request):
               param = request.rel_url.query
               content = await request.content.read()              
@@ -209,7 +146,7 @@ class Program():
         file_name = request.match_info.get('file_name', "Anonymous")
         resp = web.FileResponse(f'audio/{file_name}')
         return resp
-        web.run_app(self.app, port=8080)
+       # web.run_app(self.app, port=8080)
           
           
     def create_user(self, connection_string):
@@ -234,7 +171,7 @@ if __name__ == "__main__":
     asyncio.run(obj.program())
     
     
-    def CallUri():
-     app = web.Application()    
+    # def CallUri():
+    #      app = web.Application()    
 
     

@@ -1,4 +1,5 @@
 from azure.eventgrid import EventGridEvent
+from azure.core.messaging import CloudEvent
 from BlobStorageHelper import BlobStorageHelper
 from ConfigurationManager import ConfigurationManager
 from Logger import Logger
