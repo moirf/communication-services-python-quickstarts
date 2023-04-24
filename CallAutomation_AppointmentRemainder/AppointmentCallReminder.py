@@ -8,7 +8,7 @@ from azure.communication.identity._shared.models import CommunicationIdentifier
 from CallConfiguration import CallConfiguration
 from ConfigurationManager import ConfigurationManager
 from Logger import Logger
-from CommunicationIdentifierKind import CommunicationIdentifierKind
+#from CommunicationIdentifierKind import CommunicationIdentifierKind
 from azure.communication.identity import CommunicationUserIdentifier
 from azure.communication.chat import PhoneNumberIdentifier
 from azure.communication.callautomation import CallInvite,CreateCallResult,CallConnected,\
