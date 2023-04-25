@@ -3,7 +3,6 @@ import nest_asyncio
 import uuid
 import azure
 import azure.communication
-import azure.communication.callautomation
 from azure.core.messaging import CloudEvent
 from azure.communication.identity._shared.models import CommunicationIdentifier,PhoneNumberIdentifier, CommunicationUserIdentifier
 from azure.cognitiveservices.speech import AudioDataStream, SpeechConfig, SpeechSynthesizer, SpeechSynthesisOutputFormat
@@ -12,15 +11,15 @@ from aiohttp import web
 from Logger import Logger
 from ConfigurationManager import ConfigurationManager
 from CallConfiguration import CallConfiguration
-from Ngrok.NgrokService import NgrokService
 from azure.communication.identity import CommunicationIdentityClient
-from AppointmentCallReminder import AppointmentCallReminder
-from Controller.RemainderCallController import RemainderCallController
 from azure.communication.callautomation import CallAutomationClient,CallInvite,\
 CallAutomationEventParser,CallConnected,CallMediaRecognizeOptions,CallMediaRecognizeDtmfOptions,\
-    CallConnectionClient,CallDisconnected
+CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,\
+RecognizeCanceled,RecognizeCompleted,RecognizeFailed,AddParticipantFailed,AddParticipantSucceeded
 class Program(): 
     app = web.Application() 
+    Target_number = None
+    ngrok_url = None
     call_configuration: CallConfiguration = None
     calling_Automation_client: CallAutomationClient  = None
     call_connection: CallConnectionClient = None 
@@ -30,33 +29,8 @@ class Program():
     call_terminated_task: asyncio.Future = None
     tone_received_complete_task: asyncio.Future = None
     add_participant_complete_task: asyncio.Future = None
-    max_retry_attempt_count: int = None
-     
+    max_retry_attempt_count: int = None     
     configuration_manager = None
-    __ngrok_service = None
-    url = "http://localhost:8080"
-    target = None
-    
-    async def start_callBack(self,request):
-        try: 
-             content = await request.content.read()             
-             #param=CloudEvent.from_dict(json.loads(str(content.decode('UTF-8'))[0]))            
-             event = CallAutomationEventParser.parse(content)
-             call_connection_id = event.call_connection_id
-             call_Connection = CallAutomationClient.get_call_connection(self,call_connection_id)            
-             call_Connection_Media =call_Connection._call_media            
-             if event.kind == CallConnected:
-                 Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
-                                 + event.call_connection_id)
-             # recognize_Options=CallMediaRecognizeDtmfOptions(CommunicationIdentifier.raw_id(target))
-
-          
-        except Exception as ex:
-            Logger.log_message(
-                Logger.ERROR, "Failed to start Audio --> " + str(ex))
-            
-          
-
     def __init__(self):
         Logger.log_message(Logger.INFORMATION, "Starting ACS Sample App ")
         # Get configuration properties
@@ -64,24 +38,21 @@ class Program():
         self.configuration_manager = ConfigurationManager.get_instance()        
         self.max_retry_attempt_count: int = int(ConfigurationManager.get_instance().get_app_settings("MaxRetryCount"))
         self.calling_Automation_client = CallAutomationClient.from_connection_string(self.configuration_manager.get_app_settings("Connectionstring"))
-        self.app.add_routes([web.post('/api/call',(self.on_incoming_request_async))])
+        self.ngrok_url =self.configuration_manager.get_app_settings("AppBaseUri")
+        self.call_configuration = self.initiate_configuration(self.ngrok_url)        
+        #self.app.add_routes([web.post('/api/call',(self.on_incoming_request_async))])
         self.app.add_routes([web.get("/audio/{file_name}", self.load_file)])
         self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
 
     async def program(self):
         # Start Ngrok service
-        
-        ngrok_url =self.configuration_manager.get_app_settings("AppBaseUri")
         try:
-            if (ngrok_url and len(ngrok_url)):
-                Logger.log_message(Logger.INFORMATION,"Server started at -- > " + self.url)
-                run_sample = asyncio.create_task(self.run_sample(ngrok_url)) 
-                # loop = asyncio.get_event_loop()
-                # loop.run_until_complete(self.start_callBack())
-                web.run_app(self.app, port=58963)
-                await run_sample               
+            if (self.ngrok_url and len(self.ngrok_url)):
+                Logger.log_message(Logger.INFORMATION,"Server started at -- > " + self.ngrok_url)
                 
-
+                run_sample = asyncio.create_task(self.run_sample(self.call_configuration))               
+                web.run_app(self.app, port=58963)
+                await run_sample ;
             else:
                 Logger.log_message(Logger.INFORMATION,
                                    "Failed to start Ngrok service")
@@ -90,15 +61,19 @@ class Program():
             Logger.log_message(
                 Logger.ERROR, "Failed to start Ngrok service --> "+str(ex))
 
-    async def run_sample(self, app_base_url):
-        call_configuration = self.initiate_configuration(app_base_url)
+    async def run_sample(self, call_configuration):
+        
         try:
-            Target_Phone_Number = self.configuration_manager.get_app_settings("TargetPhoneNumber")            
+            Target_Phone_Number = self.configuration_manager.get_app_settings("TargetPhoneNumber")
+                        
             if(Target_Phone_Number and len(Target_Phone_Number)):
                source = CommunicationUserIdentifier(call_configuration.source_identity)
                targets = CommunicationUserIdentifier(Target_Phone_Number) 
-               target=targets;
+            #    source = PhoneNumberIdentifier(call_configuration.source_identity)
+            #    targets = PhoneNumberIdentifier(Target_Phone_Number)
+               self.Target_number=targets;
                Callinvite=CallInvite(targets)
+               #Callinvite.sourceCallIdNumber=source
                Logger.log_message(Logger.INFORMATION,"Performing CreateCall operation")
                self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=call_configuration.app_callback_url)                
                Logger.log_message(
@@ -109,10 +84,52 @@ class Program():
             Logger.log_message(
                 Logger.ERROR, "Failure occured while creating/establishing the call. Exception -- > " + str(ex))
 
-        # self.delete_user(call_configuration.connection_string,
-        #                  call_configuration.source_identity)
-
-
+    async def start_callBack(self,request):
+        try: 
+             content = await request.content.read()
+             event = CallAutomationEventParser.parse(content)             
+             call_Connection = self.calling_Automation_client.get_call_connection(event.call_connection_id)            
+             call_Connection_Media =call_Connection.get_call_media()            
+             if event is CallConnected :
+                 Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
+                                 + event.call_connection_id)
+                 
+                 #CallMedia_Recognize_Options = CallMediaRecognizeOptions('DTMF',self.Target_number)    
+                 recognize_Options = CallMediaRecognizeDtmfOptions(self.Target_number,max_tones_to_collect=1)
+                 recognize_Options.interrupt_prompt = True
+                 recognize_Options.inter_tone_timeout = 30
+                 recognize_Options.initial_silence_timeout=5
+                #recognize_Options.stop_current_operations=
+                #recognize_Options.interrupt_call_media_operation= True
+                 File_source= FileSource
+                 File_source.uri = self.call_configuration.audio_file_url           
+                 recognize_Options.play_prompt=File_source.uri
+                 #(PlaySource(play_source_id = self.call_configuration.audio_file_url))
+                 recognize_Options.operation_context= "AppointmentReminderMenu"             
+                 call_Connection_Media.start_recognizing(recognize_Options)
+             if event is RecognizeCompleted and event.operation_context == 'AppointmentReminderMenu' :
+                 Logger.log_message(Logger.INFORMATION,'RecognizeCompleted event received for call connection id --> '+ event.call_connection_id
+                                    +'Correlation id:'+event.correlation_id)
+                 
+             if event is RecognizeFailed and event.operation_context == 'AppointmentReminderMenu' :
+                 Logger.log_message(Logger.INFORMATION,'RecognizeFailed event received for call connection id --> '+ event.call_connection_id
+                                    +'Correlation id:'+event.correlation_id)   
+             if event is AddParticipantSucceeded :
+                  Logger.log_message(Logger.INFORMATION,'participant added --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)  
+             if event is AddParticipantFailed :
+                   Logger.log_message(Logger.INFORMATION,'Failed participant Reason --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id) 
+             if event is ParticipantsUpdated :
+                 Logger.log_message(Logger.INFORMATION,'Participants Updated --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id) 
+             
+             
+        except Exception as ex:
+            Logger.log_message(
+                Logger.ERROR, "Failed to start Audio --> " + str(ex))
+            
+          
     
         # <summary>
         # Fetch configurations from App Settings and create source identity
@@ -170,8 +187,5 @@ if __name__ == "__main__":
     obj = Program()
     asyncio.run(obj.program())
     
-    
-    # def CallUri():
-    #      app = web.Application()    
-
+   
     

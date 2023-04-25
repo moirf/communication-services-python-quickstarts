@@ -11,4 +11,4 @@ class CallConfiguration:
         self.audio_file_name: str = str(audio_file_name)
         self.Event_CallBack_Route:str = str(Event_CallBack_Route)
         self.app_callback_url: str = app_base_url + Event_CallBack_Route
-        self.audio_file_url: str = app_base_url + "/audio/" + audio_file_name
+        self.audio_file_url: str = app_base_url + audio_file_name
