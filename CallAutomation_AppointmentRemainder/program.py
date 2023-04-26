@@ -14,8 +14,11 @@ from CallConfiguration import CallConfiguration
 from azure.communication.identity import CommunicationIdentityClient
 from azure.communication.callautomation import CallAutomationClient,CallInvite,\
 CallAutomationEventParser,CallConnected,CallMediaRecognizeOptions,CallMediaRecognizeDtmfOptions,\
-CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,\
-RecognizeCanceled,RecognizeCompleted,RecognizeFailed,AddParticipantFailed,AddParticipantSucceeded
+CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,DtmfTone,\
+RecognizeCanceled,RecognizeCompleted,RecognizeFailed,AddParticipantFailed,AddParticipantSucceeded,\
+    PlayCompleted,PlayFailed,RemoveParticipantSucceeded,RemoveParticipantFailed
+    
+    
 class Program(): 
     app = web.Application() 
     Target_number = None
@@ -40,8 +43,8 @@ class Program():
         self.calling_Automation_client = CallAutomationClient.from_connection_string(self.configuration_manager.get_app_settings("Connectionstring"))
         self.ngrok_url =self.configuration_manager.get_app_settings("AppBaseUri")
         self.call_configuration = self.initiate_configuration(self.ngrok_url)        
-        #self.app.add_routes([web.post('/api/call',(self.on_incoming_request_async))])
-        self.app.add_routes([web.get("/audio/{file_name}", self.load_file)])
+        self.app.add_routes([web.post('/api/call',(self.on_incoming_request_async))])
+        self.app.add_routes([web.get("/Audio/{file_name}", self.load_file)])
         self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
 
     async def program(self):
@@ -87,42 +90,65 @@ class Program():
     async def start_callBack(self,request):
         try: 
              content = await request.content.read()
-             event = CallAutomationEventParser.parse(content)             
+             event = CallAutomationEventParser.parse(content) 
+             Logger.log_message(Logger.INFORMATION,' event Kind  --> '+ event.kind)
+                         
              call_Connection = self.calling_Automation_client.get_call_connection(event.call_connection_id)            
              call_Connection_Media =call_Connection.get_call_media()            
-             if event is CallConnected :
+             if event.kind == 'CallConnected' :
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
-                                 + event.call_connection_id)
-                 
-                 #CallMedia_Recognize_Options = CallMediaRecognizeOptions('DTMF',self.Target_number)    
+                                 + event.call_connection_id)                
+                   
                  recognize_Options = CallMediaRecognizeDtmfOptions(self.Target_number,max_tones_to_collect=1)
                  recognize_Options.interrupt_prompt = True
-                 recognize_Options.inter_tone_timeout = 30
-                 recognize_Options.initial_silence_timeout=5
-                #recognize_Options.stop_current_operations=
-                #recognize_Options.interrupt_call_media_operation= True
-                 File_source= FileSource
-                 File_source.uri = self.call_configuration.audio_file_url           
-                 recognize_Options.play_prompt=File_source.uri
-                 #(PlaySource(play_source_id = self.call_configuration.audio_file_url))
+                 recognize_Options.inter_tone_timeout = 10
+                 recognize_Options.initial_silence_timeout=5                  
+                 #recognize_Options.play_prompt = FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_url))                 
+                 File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_url))                 
+                 File_source.play_source_id= "AppointmentReminderMenu"                 
+                 recognize_Options.play_prompt = File_source                
                  recognize_Options.operation_context= "AppointmentReminderMenu"             
                  call_Connection_Media.start_recognizing(recognize_Options)
-             if event is RecognizeCompleted and event.operation_context == 'AppointmentReminderMenu' :
+                 
+             if event.kind == 'RecognizeCompleted' and event.operation_context == 'AppointmentReminderMenu' :
                  Logger.log_message(Logger.INFORMATION,'RecognizeCompleted event received for call connection id --> '+ event.call_connection_id
                                     +'Correlation id:'+event.correlation_id)
+                 toneDetected=event.collect_tones_result.tones[0]
+                 if toneDetected == DtmfTone.ONE:
+                     playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Confirmed_Audio))
+                     PlayOption = call_Connection_Media.play_to_all(playSource,content="ResponseToDtmf")
+                 elif toneDetected == DtmfTone.TWO :
+                       playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Cancelled_Audio))
+                       PlayOption = call_Connection_Media.play_to_all(playSource,content="ResponseToDtmf")
+                 elif toneDetected == DtmfTone.THREE :
+                       playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Agent_Audio))
+                       PlayOption = call_Connection_Media.play_to_all(playSource,content="AgentConnect")
+                 else:
+                     playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Invalid_Input_Audio))
+                     call_Connection_Media.play_to_all(playSource)
                  
-             if event is RecognizeFailed and event.operation_context == 'AppointmentReminderMenu' :
+                           
+                 
+             if event.kind == 'RecognizeFailed' and event.operation_context == 'AppointmentReminderMenu' :
                  Logger.log_message(Logger.INFORMATION,'RecognizeFailed event received for call connection id --> '+ event.call_connection_id
-                                    +'Correlation id:'+event.correlation_id)   
-             if event is AddParticipantSucceeded :
+                                    +'Correlation id:'+event.correlation_id) 
+             if event.kind == 'PlayCompleted':
+                     Logger.log_message(Logger.INFORMATION,'PlayCompleted event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_Connection.hang_up(True)
+             if event.kind == 'PlayFailed':
+                     Logger.log_message(Logger.INFORMATION,'PlayFailed event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_Connection.hang_up(True) 
+             if event.kind == 'AddParticipantSucceeded' :
                   Logger.log_message(Logger.INFORMATION,'participant added --> '+ event.call_connection_id
-                                    +'Call Connection Properties :'+event.correlation_id)  
-             if event is AddParticipantFailed :
+                                    +'Call Connection Properties :'+event.correlation_id)               
+             if event.kind == 'AddParticipantFailed' :
                    Logger.log_message(Logger.INFORMATION,'Failed participant Reason --> '+ event.call_connection_id
                                     +'Call Connection Properties :'+event.correlation_id) 
-             if event is ParticipantsUpdated :
-                 Logger.log_message(Logger.INFORMATION,'Participants Updated --> '+ event.call_connection_id
-                                    +'Call Connection Properties :'+event.correlation_id) 
+             if event.kind == 'ParticipantsUpdated' :
+                 Logger.log_message(Logger.INFORMATION,'Participants Updated --> ')
+                                    
              
              
         except Exception as ex:
@@ -144,8 +170,14 @@ class Program():
             Event_CallBack_Route=self.configuration_manager.get_app_settings("EventCallBackRoute")
             source_identity = self.create_user(connection_string)
             audio_file_name = self.configuration_manager.get_app_settings("AppointmentReminderMenuAudio")
+            Appointment_Confirmed_Audio = self.configuration_manager.get_app_settings("AppointmentConfirmedAudio")
+            Appointment_Cancelled_Audio = self.configuration_manager.get_app_settings("AppointmentCancelledAudio")
+            Agent_Audio = self.configuration_manager.get_app_settings("AgentAudio")
+            Invalid_Input_Audio = self.configuration_manager.get_app_settings("InvalidInputAudio")
 
-            return CallConfiguration(connection_string, source_identity, source_phone_number, app_base_url, audio_file_name,Event_CallBack_Route)
+            return CallConfiguration(connection_string, source_identity, source_phone_number, app_base_url, 
+                                     audio_file_name,Event_CallBack_Route,Appointment_Confirmed_Audio,
+                                     Appointment_Cancelled_Audio,Agent_Audio,Invalid_Input_Audio)
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, "Failed to CallConfiguration. Exception -- > " + str(ex))
@@ -161,7 +193,7 @@ class Program():
    
     async def load_file(self, request):
         file_name = request.match_info.get('file_name', "Anonymous")
-        resp = web.FileResponse(f'audio/{file_name}')
+        resp = web.FileResponse(f'Audio/{file_name}')
         return resp
        # web.run_app(self.app, port=8080)
           
