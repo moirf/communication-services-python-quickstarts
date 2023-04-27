@@ -5,9 +5,10 @@ class ConfigurationManager:
     _configpath=None
 
     def __init__(self):
-        if(self.__configuration == None):           
+        if(self.__configuration == None): 
+            _configpath = 'C:/Users/v-raniv/Desktop/Git_project/April/python/communication-services-python-quickstarts/Call-Automation-Appointment-Remainder/config.ini'           
             self.__configuration = configparser.ConfigParser()
-            self.__configuration.read('config.ini')
+            self.__configuration.read(_configpath)
 
     @staticmethod
     def get_instance():
