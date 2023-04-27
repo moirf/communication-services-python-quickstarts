@@ -56,22 +56,7 @@ class Program():
         self.app.add_routes([web.get('/Audio/{file_name}', self.load_file)])
         self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
         web.run_app(self.app, port=8080)
-    async def program(self):
-        # Start Ngrok service
-        try:
-            if (self.ngrok_url and len(self.ngrok_url)):
-                Logger.log_message(Logger.INFORMATION,'Server started at -- > ' + self.ngrok_url)
-                
-                run_sample = asyncio.create_task(self.run_sample())               
-                web.run_app(self.app, port=58963)
-                await run_sample ;
-            else:
-                Logger.log_message(Logger.INFORMATION,
-                                   'Failed to start Ngrok service')
-
-        except Exception as ex:
-            Logger.log_message(
-                Logger.ERROR, 'Failed to start Ngrok service --> '+str(ex))
+    
 
     async def run_sample(self,request):
         self.call_configuration =self.initiate_configuration(self.ngrok_url) 
