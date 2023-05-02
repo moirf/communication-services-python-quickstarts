@@ -4,7 +4,7 @@ languages:
 - python
 products:
 - azure
-- azure-communication-services
+- azure-communication-Automation
 ---
 
 # Appointment Reminder Call Sample
