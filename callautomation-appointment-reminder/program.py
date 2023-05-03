@@ -45,20 +45,22 @@ class Program():
     async def run_sample(self,request):
         self.call_configuration =self.initiate_configuration(self.ngrok_url) 
         try:
-            target_Id = self.configuration_manager.get_app_settings('TargetIdentity')                        
-            if(target_Id and len(target_Id)):                
-                target_Identity = self.get_identifier_kind(target_Id)                
-                if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :
-                    self.Target_number=CommunicationUserIdentifier(target_Id)
-                    Callinvite=CallInvite(self.Target_number)                    
-                if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :
-                    self.Target_number=PhoneNumberIdentifier(target_Id)
-                    Callinvite=CallInvite(self.Target_number,sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
-                    
-                Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
-                self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=self.call_configuration.app_callback_url)                
-                Logger.log_message(
-                 Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_Response.call_connection.call_connection_id)
+            target_Ids = self.configuration_manager.get_app_settings('TargetIdentity') 
+            Target_Identities= target_Ids.split(';')
+            for target_Id in Target_Identities :                       
+                if(target_Id and len(target_Id)):                
+                    target_Identity = self.get_identifier_kind(target_Id)                
+                    if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :
+                        self.Target_number=CommunicationUserIdentifier(target_Id)
+                        Callinvite=CallInvite(self.Target_number)                    
+                    if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :
+                        self.Target_number=PhoneNumberIdentifier(target_Id)
+                        Callinvite=CallInvite(self.Target_number,sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
+                        
+                    Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
+                    self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=self.call_configuration.app_callback_url)                
+                    Logger.log_message(
+                    Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_Response.call_connection.call_connection_id)
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, 'Failure occured while creating/establishing the call. Exception -- > ' + str(ex))
