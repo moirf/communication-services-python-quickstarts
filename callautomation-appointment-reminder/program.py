@@ -4,6 +4,7 @@ from azure.communication.identity._shared.models import CommunicationIdentifier,
 import json
 from aiohttp import web
 from Logger import Logger
+from urllib.parse import urlencode
 from ConfigurationManager import ConfigurationManager,CallConfiguration
 from azure.communication.callautomation import CallAutomationClient,CallInvite,\
 CallAutomationEventParser,CallConnected,CallMediaRecognizeDtmfOptions,\
@@ -11,10 +12,10 @@ CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,
 RecognizeCanceled,RecognizeCompleted,RecognizeFailed,PlayCompleted,PlayFailed     
 
 class Program():     
-    Target_number = None
+    target_number = None
     ngrok_url = None
     call_configuration: CallConfiguration = None
-    calling_Automation_client: CallAutomationClient  = None
+    calling_automation_client: CallAutomationClient  = None
     call_connection: CallConnectionClient = None
     configuration_manager = None
     user_identity_regex: str = '8:acs:[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}_[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}'
@@ -30,8 +31,8 @@ class Program():
             return CommunicationIdentifierKind.UNKNOWN
         
     configuration_manager = ConfigurationManager.get_instance()
-    calling_Automation_client = CallAutomationClient.from_connection_string(configuration_manager.get_app_settings('Connectionstring'))
-    ngrok_url =configuration_manager.get_app_settings('App_base_uri')
+    calling_automation_client = CallAutomationClient.from_connection_string(configuration_manager.get_app_settings('Connectionstring'))
+    ngrok_url =configuration_manager.get_app_settings('app_base_uri')
     
     def __init__(self):
         Logger.log_message(Logger.INFORMATION, 'Starting ACS Sample App ')
@@ -45,21 +46,21 @@ class Program():
     async def run_sample(self,request):
         self.call_configuration =self.initiate_configuration(self.ngrok_url) 
         try:
-            target_Ids = self.configuration_manager.get_app_settings('TargetIdentity') 
-            Target_Identities= target_Ids.split(';')
-            for target_Id in Target_Identities :                       
-                if(target_Id and len(target_Id)):  
-                    Target_number= target_Id            
-                    target_Identity = self.get_identifier_kind(target_Id)                
+            target_ids = self.configuration_manager.get_app_settings('TargetIdentity') 
+            Target_identities= target_ids.split(';')
+            for target_id in Target_identities :                       
+                if(target_id and len(target_id)):  
+                    target_number= target_id            
+                    target_Identity = self.get_identifier_kind(target_id)                
                     if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
-                        Callinvite=CallInvite(CommunicationUserIdentifier(target_Id))                    
+                        Callinvite=CallInvite(CommunicationUserIdentifier(target_id))                    
                     if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
-                        Callinvite=CallInvite(PhoneNumberIdentifier(target_Id),sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
-                    call_back_url= self.call_configuration.app_callback_url+'/Target_number=? ' + Target_number   
+                        Callinvite=CallInvite(PhoneNumberIdentifier(target_id),sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
+                    call_back_url= self.call_configuration.app_callback_url+'/target_number=?' +target_number   
                     Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
-                    self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=call_back_url)                
+                    self.call_connection_response = CallAutomationClient.create_call(self.calling_automation_client ,Callinvite,callback_uri=call_back_url)                
                     Logger.log_message(
-                    Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_Response.call_connection.call_connection_id)
+                    Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_response.call_connection.call_connection_id)
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, 'Failure occured while creating/establishing the call. Exception -- > ' + str(ex))
@@ -67,56 +68,58 @@ class Program():
     async def start_callBack(self,request):
         try: 
              target_id_comm=None
-             target_id=self.Target_number
+             target_id=request.query_string
              if(target_id and len(target_id)):
+                if(re.search(r"\s",target_id)):
+                   target_id='+'+ (target_id).lstrip() 
                 target_Identity = self.get_identifier_kind(target_id)                
                 if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
-                            target_id_comm=CommunicationUserIdentifier(target_id)                   
-                if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER : 
+                            target_id_comm=CommunicationUserIdentifier(target_id) 
+                if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
                         target_id_comm=PhoneNumberIdentifier(target_id)
-             content = await request.content.read()
-             event = CallAutomationEventParser.parse(content)                        
-             call_Connection = self.calling_Automation_client.get_call_connection(event.call_connection_id)            
-             call_Connection_Media =call_Connection.get_call_media()            
+             _content = await request.content.read()
+             event = CallAutomationEventParser.parse(_content)                        
+             call_connection = self.calling_automation_client.get_call_connection(event.call_connection_id)            
+             call_connection_media =call_connection.get_call_media()            
              if event.__class__ == CallConnected:
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
                                  + event.call_connection_id)
-                 recognize_Options = CallMediaRecognizeDtmfOptions(target_id_comm,max_tones_to_collect=1)
-                 recognize_Options.interrupt_prompt = True
-                 recognize_Options.inter_tone_timeout = 60                 
-                 recognize_Options.initial_silence_timeout=10 
+                 recognize_options = CallMediaRecognizeDtmfOptions(target_id_comm,max_tones_to_collect=1)
+                 recognize_options.interrupt_prompt = True
+                 recognize_options.inter_tone_timeout = 30                 
+                 recognize_options.initial_silence_timeout=5 
                  File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_url))                 
                  File_source.play_source_id= 'AppointmentReminderMenu'                 
-                 recognize_Options.play_prompt = File_source                
-                 recognize_Options.operation_context= 'AppointmentReminderMenu'             
-                 call_Connection_Media.start_recognizing(recognize_Options)
+                 recognize_options.play_prompt = File_source                
+                 recognize_options.operation_context= 'AppointmentReminderMenu'             
+                 call_connection_media.start_recognizing(recognize_options)
              if event.__class__ == RecognizeCompleted and event.operation_context == 'AppointmentReminderMenu' :
                  Logger.log_message(Logger.INFORMATION,'RecognizeCompleted event received for call connection id --> '+ event.call_connection_id
                                     +'Correlation id:'+event.correlation_id)
                  toneDetected=event.collect_tones_result.tones[0]
                  if toneDetected == DtmfTone.ONE:
                      playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Confirmed_Audio))
-                     PlayOption = call_Connection_Media.play_to_all(playSource,content='ResponseToDtmf')
+                     PlayOption = call_connection_media.play_to_all(playSource,content='ResponseToDtmf')
                  elif toneDetected == DtmfTone.TWO :
                        playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Cancelled_Audio))
-                       PlayOption = call_Connection_Media.play_to_all(playSource,content='ResponseToDtmf')
+                       PlayOption = call_connection_media.play_to_all(playSource,content='ResponseToDtmf')
                  else:
                      playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Invalid_Input_Audio))
-                     call_Connection_Media.play_to_all(playSource) 
+                     call_connection_media.play_to_all(playSource) 
                  
              if event.__class__ == RecognizeFailed and event.operation_context == 'AppointmentReminderMenu' :
                  Logger.log_message(Logger.INFORMATION,'Recognition timed out for call connection id --> '+ event.call_connection_id
                                     +'Correlation id:'+event.correlation_id)
                  playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Timed_out_Audio))
-                 call_Connection_Media.play_to_all(playSource)
+                 call_connection_media.play_to_all(playSource)
              if event.__class__ == PlayCompleted:
                      Logger.log_message(Logger.INFORMATION,'PlayCompleted event received for call connection id --> '+ event.call_connection_id
                                     +'Call Connection Properties :'+event.correlation_id)
-                     call_Connection.hang_up(True)
+                     call_connection.hang_up(True)
              if event.__class__ == PlayFailed:
                      Logger.log_message(Logger.INFORMATION,'PlayFailed event received for call connection id --> '+ event.call_connection_id
                                     +'Call Connection Properties :'+event.correlation_id)
-                     call_Connection.hang_up(True)            
+                     call_connection.hang_up(True)            
              if event.__class__ == ParticipantsUpdated :
                  Logger.log_message(Logger.INFORMATION,'Participants Updated --> ')
              if event.__class__ == CallDisconnected :
@@ -136,18 +139,18 @@ class Program():
 
     def initiate_configuration(self, app_base_url):
         try:
-            connection_string = self.configuration_manager.get_app_settings('Connectionstring')
-            source_phone_number = self.configuration_manager.get_app_settings('SourcePhone')
-            Event_CallBack_Route=self.configuration_manager.get_app_settings('EventCallBackRoute')
-            audio_file_name = self.configuration_manager.get_app_settings('AppointmentReminderMenuAudio')
-            Appointment_Confirmed_Audio = self.configuration_manager.get_app_settings('AppointmentConfirmedAudio')
-            Appointment_Cancelled_Audio = self.configuration_manager.get_app_settings('AppointmentCancelledAudio')
-            Timed_out_Audio = self.configuration_manager.get_app_settings('TimedoutAudio')
-            Invalid_Input_Audio = self.configuration_manager.get_app_settings('InvalidInputAudio')
+            connection_string = self.configuration_manager.get_app_settings('connectionstring')
+            source_phone_number = self.configuration_manager.get_app_settings('Sourcephone')
+            event_callback_route=self.configuration_manager.get_app_settings('eventcallbackroute')
+            audio_file_name = self.configuration_manager.get_app_settings('appointmentremindermenuaudio')
+            appointment_confirmed_audio = self.configuration_manager.get_app_settings('appointmentconfirmedaudio')
+            appointment_cancelled_audio = self.configuration_manager.get_app_settings('appointmentcancelledaudio')
+            timed_out_audio = self.configuration_manager.get_app_settings('timedoutaudio')
+            invalid_input_audio = self.configuration_manager.get_app_settings('invalidinputaudio')
 
             return CallConfiguration(connection_string, source_phone_number, app_base_url, 
-                                     audio_file_name,Event_CallBack_Route,Appointment_Confirmed_Audio,
-                                     Appointment_Cancelled_Audio,Timed_out_Audio,Invalid_Input_Audio)
+                                     audio_file_name,event_callback_route,appointment_confirmed_audio,
+                                     appointment_cancelled_audio,timed_out_audio,invalid_input_audio)
         except Exception as ex:
             Logger.log_message(
                 Logger.ERROR, 'Failed to CallConfiguration. Exception -- > ' + str(ex))
@@ -159,3 +162,6 @@ class Program():
         file_name = request.match_info.get('file_name', 'Anonymous')
         resp = web.FileResponse(f'Audio/{file_name}')
         return resp
+    
+if __name__ == '__main__':
+    Program()
