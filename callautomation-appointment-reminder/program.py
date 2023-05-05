@@ -1,6 +1,6 @@
 import re
 from azure.communication.identity._shared.models import CommunicationIdentifier,PhoneNumberIdentifier,\
-    CommunicationUserIdentifier,CommunicationIdentifierKind
+    CommunicationUserIdentifier,CommunicationIdentifierKind,identifier_from_raw_id
 import json
 from aiohttp import web
 from Logger import Logger
@@ -39,7 +39,7 @@ class Program():
         self.app = web.Application()        
         self.app.add_routes([web.post('/api/call',self.run_sample)])
         self.app.add_routes([web.get('/audio/{file_name}', self.load_file)])
-        self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
+        self.app.add_routes([web.post('/api/callbacks/{contextId}',self.start_callBack)])
         web.run_app(self.app, port=58963)
         
     async def run_sample(self,request):
@@ -48,17 +48,16 @@ class Program():
             target_Ids = self.configuration_manager.get_app_settings('TargetIdentity') 
             Target_Identities= target_Ids.split(';')
             for target_Id in Target_Identities :                       
-                if(target_Id and len(target_Id)):                
+                if(target_Id and len(target_Id)):  
+                    Target_number= target_Id            
                     target_Identity = self.get_identifier_kind(target_Id)                
-                    if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :
-                        self.Target_number=CommunicationUserIdentifier(target_Id)
-                        Callinvite=CallInvite(self.Target_number)                    
-                    if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :
-                        self.Target_number=PhoneNumberIdentifier(target_Id)
-                        Callinvite=CallInvite(self.Target_number,sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
-                        
+                    if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
+                        Callinvite=CallInvite(CommunicationUserIdentifier(target_Id))                    
+                    if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
+                        Callinvite=CallInvite(PhoneNumberIdentifier(target_Id),sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
+                    call_back_url= self.call_configuration.app_callback_url+'/Target_number=? ' + Target_number   
                     Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
-                    self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=self.call_configuration.app_callback_url)                
+                    self.call_connection_Response = CallAutomationClient.create_call(self.calling_Automation_client ,Callinvite,callback_uri=call_back_url)                
                     Logger.log_message(
                     Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_Response.call_connection.call_connection_id)
         except Exception as ex:
@@ -67,6 +66,14 @@ class Program():
 
     async def start_callBack(self,request):
         try: 
+             target_id_comm=None
+             target_id=self.Target_number
+             if(target_id and len(target_id)):
+                target_Identity = self.get_identifier_kind(target_id)                
+                if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
+                            target_id_comm=CommunicationUserIdentifier(target_id)                   
+                if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER : 
+                        target_id_comm=PhoneNumberIdentifier(target_id)
              content = await request.content.read()
              event = CallAutomationEventParser.parse(content)                        
              call_Connection = self.calling_Automation_client.get_call_connection(event.call_connection_id)            
@@ -74,10 +81,10 @@ class Program():
              if event.__class__ == CallConnected:
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
                                  + event.call_connection_id)
-                 recognize_Options = CallMediaRecognizeDtmfOptions(self.Target_number,max_tones_to_collect=1)
+                 recognize_Options = CallMediaRecognizeDtmfOptions(target_id_comm,max_tones_to_collect=1)
                  recognize_Options.interrupt_prompt = True
-                 recognize_Options.inter_tone_timeout = 30                 
-                 recognize_Options.initial_silence_timeout=5 
+                 recognize_Options.inter_tone_timeout = 60                 
+                 recognize_Options.initial_silence_timeout=10 
                  File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_url))                 
                  File_source.play_source_id= 'AppointmentReminderMenu'                 
                  recognize_Options.play_prompt = File_source                
@@ -152,10 +159,3 @@ class Program():
         file_name = request.match_info.get('file_name', 'Anonymous')
         resp = web.FileResponse(f'Audio/{file_name}')
         return resp
-       
-if __name__ == '__main__':
-    Program()
-   
-    
-   
-    
