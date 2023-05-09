@@ -23,13 +23,11 @@ The application is a console based application build using Python 3.9 and above.
 - Download and install [VS Code](https://code.visualstudio.com/download) or  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/) 
 -[Python311](https://www.python.org/downloads/) (Make sure to install version that corresponds with your visual studio instance, 32 vs 64 bit)
 - Download and install [Ngrok](https://www.ngrok.com/download). As the sample is run locally, Ngrok will enable the receiving of all the events.
-
--Generate Ngrok Url by using below steps.
-
-       - Open command prompt or powershell window on the machine using to run the sample.
-       - Navigate to directory path where Ngrok.exe file is located. Then, run:
-       - ngrok http {portNumber}(For e.g. ngrok http 8080)
-       - Get Ngrok Url generated. Ngrok Url will be in the form of e.g. "https://95b6-43-230-212-228.    ngrok-free.app"
+- Generate Ngrok Url by using below steps.
+    - Open command prompt or powershell window on the machine using to run the sample.
+    - Navigate to directory path where Ngrok.exe file is located. Then, run:
+    - ngrok http {portNumber}(For e.g. ngrok http 8080)
+    - Get Ngrok Url generated. Ngrok Url will be in the form of e.g. "https://95b6-43-230-212-228.ngrok-free.app"
 
 ### Before running the sample for the first time
 
@@ -49,6 +47,5 @@ The application is a console based application build using Python 3.9 and above.
 
 - Add azure communication callautomation's wheel file path in requirement.txt
 - Navigate to the directory containing the requirements.txt file and use the following commands for installing all the dependencies and for running the application respectively:
-
-        - pip install -r requirements.txt
-        - python program.py
+     - pip install -r requirements.txt
+     - python program.py
