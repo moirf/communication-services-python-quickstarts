@@ -1,9 +1,7 @@
 import re
-from uuid import UUID
 import azure
 import ast
-from azure.eventgrid import EventGridEvent,SystemEventNames
-from azure.core.messaging import CloudEvent
+from azure.eventgrid import EventGridEvent
 from azure.communication.identity._shared.models import CommunicationIdentifier,PhoneNumberIdentifier,\
     CommunicationUserIdentifier,CommunicationIdentifierKind,identifier_from_raw_id
 import json
@@ -12,10 +10,9 @@ from Logger import Logger
 from ConfigurationManager import ConfigurationManager
 from azure.communication.identity import CommunicationIdentityClient
 from azure.communication.callautomation import CallAutomationClient,CallInvite,\
-CallAutomationEventParser,CallConnected,CallMediaRecognizeOptions,CallMediaRecognizeDtmfOptions,\
-CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,DtmfTone,\
-RecognizeCanceled,RecognizeCompleted,RecognizeFailed,AddParticipantFailed,AddParticipantSucceeded,\
-    PlayCompleted,PlayFailed
+CallAutomationEventParser,CallConnected,CallMediaRecognizeDtmfOptions,\
+FileSource,DtmfTone,PlayCompleted,PlayFailed,AddParticipantSucceeded,AddParticipantFailed,\
+RecognizeCompleted,RecognizeFailed\
     
 
 configuration_manager = ConfigurationManager.get_instance()
@@ -108,50 +105,50 @@ class Program():
                                     +'Correlation id:'+event.correlation_id)
                  toneDetected=event.collect_tones_result.tones[0]
                  if toneDetected == DtmfTone.ONE:
-                     playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('SalesAudio')))
-                     playSource.play_source_id='SimpleIVR'
-                     PlayOption = call_Connection_Media.play_to_all(playSource,operation_context='SimpleIVR')
+                     play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('SalesAudio')))
+                     play_source.play_source_id='SimpleIVR'
+                     call_Connection_Media.play_to_all(play_source,operation_context='SimpleIVR')
                     
                  elif toneDetected == DtmfTone.TWO :
-                       playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('MarketingAudio')))
-                       PlayOption = call_Connection_Media.play_to_all(playSource,operation_context='SimpleIVR')
+                       play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('MarketingAudio')))
+                       call_Connection_Media.play_to_all(play_source,operation_context='SimpleIVR')
                  elif toneDetected == DtmfTone.THREE :
-                       playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('CustomerCareAudio')))
-                       PlayOption = call_Connection_Media.play_to_all(playSource, operation_context='SimpleIVR')
+                       play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('CustomerCareAudio')))
+                       call_Connection_Media.play_to_all(play_source, operation_context='SimpleIVR')
                  elif toneDetected == DtmfTone.FOUR :
-                       playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('AgentAudio')))
-                       PlayOption = call_Connection_Media.play_to_all(playSource,  operation_context='AgentConnect')
+                       play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('AgentAudio')))
+                       call_Connection_Media.play_to_all(play_source,  operation_context='AgentConnect')
                  elif toneDetected == DtmfTone.FIVE :
                       call_Connection.hang_up(True)
                  else:
-                     playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('InvalidAudio')))
-                     call_Connection_Media.play_to_all(playSource, operation_context='SimpleIVR')                
+                     play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('InvalidAudio')))
+                     call_Connection_Media.play_to_all(play_source, operation_context='SimpleIVR')                
                            
                  
              if event.__class__ == RecognizeFailed and event.operation_context == 'MainMenu' :
                  Logger.log_message(Logger.INFORMATION,'Recognition timed out for call connection id --> '+ event.call_connection_id
                                     +'Correlation id:'+event.correlation_id)
-                 playSource = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('InvalidAudio')))
-                 call_Connection_Media.play_to_all(playSource,operation_context='SimpleIVR')
+                 play_source = FileSource(uri=(BaseUri + configuration_manager.get_app_settings('InvalidAudio')))
+                 call_Connection_Media.play_to_all(play_source,operation_context='SimpleIVR')
              if event.__class__ == PlayCompleted:
                  
                  if event.operation_context == 'AgentConnect':
-                     Participant_ToAdd = configuration_manager.get_app_settings('ParticipantToAdd')
+                     participant_to_add = configuration_manager.get_app_settings('ParticipantToAdd')
                         
-                     if(Participant_ToAdd and len(Participant_ToAdd)):                        
+                     if(participant_to_add and len(participant_to_add)):                        
                           
-                            Participant_Identity = get_identifier_kind(Participant_ToAdd)                
+                            Participant_Identity = get_identifier_kind(participant_to_add)                
                             if Participant_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :
-                                self.Participant_Add=CommunicationUserIdentifier(Participant_ToAdd)
+                                self.Participant_Add=CommunicationUserIdentifier(participant_to_add)
                                 Callinvite=CallInvite(self.Participant_Add)                    
                             if Participant_Identity == CommunicationIdentifierKind.PHONE_NUMBER :
-                                self.Participant_Add=PhoneNumberIdentifier(Participant_ToAdd)
+                                self.Participant_Add=PhoneNumberIdentifier(participant_to_add)
                                 Callinvite=CallInvite(self.Participant_Add,sourceCallIdNumber=self.source_identity)                    
                                         
                             Logger.log_message(Logger.INFORMATION,'Performing add Participant operation')
-                            self.Addparticipant_Response=call_Connection.add_participant(Callinvite)                            
+                            self.add_participant_response=call_Connection.add_participant(Callinvite)                            
                             Logger.log_message(
-                            Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.Addparticipant_Response.participant)
+                            Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.add_participant_response.participant)
                                          
                  if event.operation_context == 'SimpleIVR':
                      Logger.log_message(Logger.INFORMATION,'PlayCompleted event received for call connection id --> '+ event.call_connection_id
@@ -161,7 +158,15 @@ class Program():
              if event.__class__ == PlayFailed:
                      Logger.log_message(Logger.INFORMATION,'PlayFailed event received for call connection id --> '+ event.call_connection_id
                                     +'Call Connection Properties :'+event.correlation_id)
-                     call_Connection.hang_up(True)           
+                     call_Connection.hang_up(True) 
+             if event.__class__ == AddParticipantSucceeded:
+                     Logger.log_message(Logger.INFORMATION,'AddParticipantSucceeded event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_Connection.hang_up(True)
+             if event.__class__ == AddParticipantFailed:
+                     Logger.log_message(Logger.INFORMATION,'AddParticipantFailed event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_Connection.hang_up(True)                         
               
         except Exception as ex:
             Logger.log_message(

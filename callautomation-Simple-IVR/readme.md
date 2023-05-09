@@ -9,7 +9,7 @@ products:
 
 # Call Automation - Simple IVR Solution
 
-The purpose of this sample application is to demonstrate the usage of the Azure Communication Services - Call Automation SDK for building solutions related to Interactive Voice Response (IVR). The application accepts an incoming call when an callee dialed in to either ACS Communication Identifier or ACS acquired phone number. Application prompt the Dual-Tone Multi-Frequency (DTMF) tones to select, and then plays the appropriate audio file based on the key pressed by the callee. The application has been configured to accept tone-1 through tone-5, and if any other key is pressed, the callee will hear an invalid tone and the call will be disconnected.
+The purpose of this sample application is to demonstrate the usage of the Azure Communication Call Automation SDK for building solutions related to Interactive Voice Response (IVR). The application accepts an incoming call when an callee dialed in to either ACS Communication Identifier or ACS acquired phone number. Application prompt the Dual-Tone Multi-Frequency (DTMF) tones to select, and then plays the appropriate audio file based on the key pressed by the callee. The application has been configured to accept tone-1 through tone-5, and if any other key is pressed, the callee will hear an invalid tone and the call will be disconnected.
 The application is a console based application build using Python 3.9 and above.
 
 ## Getting started
@@ -20,9 +20,17 @@ The application is a console based application build using Python 3.9 and above.
 - [Python](https://www.python.org/downloads/) 3.9 and above
 - Create an Azure Communication Services resource. For details, see [Create an Azure Communication Resource](https://docs.microsoft.com/azure/communication-services/quickstarts/create-communication-resource). You'll need to record your resource **connection string** for this sample.
 - Get a phone number for your new Azure Communication Services resource. For details, see [Get a phone number](https://docs.microsoft.com/azure/communication-services/quickstarts/telephony-sms/get-phone-number?pivots=platform-azp)
-- Download and install [Ngrok](https://www.ngrok.com/download). As the sample is run locally, Ngrok will enable the receiving of all the events.
-- Download and install  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/)
+
+- Download and install [VS Code](https://code.visualstudio.com/download) or  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/)
 -[Python311](https://www.python.org/downloads/) (Make sure to install version that corresponds with your visual studio instance, 32 vs 64 bit)
+- Download and install [Ngrok](https://www.ngrok.com/download). As the sample is run locally, Ngrok will enable the receiving of all the events.
+- Generate Ngrok Url by using below steps.
+     - Open command prompt or powershell window on the machine using to run the sample.
+	 - Navigate to directory path where Ngrok.exe file is located. Then, run:
+	 - ngrok http {portNumber}(For e.g. ngrok http 8080)
+	 - Get Ngrok Url generated. Ngrok Url will be in the form of e.g. "https://95b6-43-230-212-228.ngrok-free.app"
+	
+
 
 
 ### Configuring application
