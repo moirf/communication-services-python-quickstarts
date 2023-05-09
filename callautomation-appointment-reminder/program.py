@@ -33,32 +33,33 @@ class Program():
     configuration_manager = ConfigurationManager.get_instance()
     calling_automation_client = CallAutomationClient.from_connection_string(configuration_manager.get_app_settings('Connectionstring'))
     ngrok_url =configuration_manager.get_app_settings('app_base_uri')
-    
+    targets_identifiers= {}; 
+
     def __init__(self):
         Logger.log_message(Logger.INFORMATION, 'Starting ACS Sample App ')
         # Get configuration properties  
         self.app = web.Application()        
         self.app.add_routes([web.post('/api/call',self.run_sample)])
         self.app.add_routes([web.get('/audio/{file_name}', self.load_file)])
-        self.app.add_routes([web.post('/api/callbacks/{contextId}',self.start_callBack)])
-        web.run_app(self.app, port=58963)
-        
+        self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
+        web.run_app(self.app, port=8080)
+    
     async def run_sample(self,request):
         self.call_configuration =self.initiate_configuration(self.ngrok_url) 
         try:
             target_ids = self.configuration_manager.get_app_settings('TargetIdentity') 
             Target_identities= target_ids.split(';')
             for target_id in Target_identities :                       
-                if(target_id and len(target_id)):  
-                    target_number= target_id            
+                if(target_id and len(target_id)):            
                     target_Identity = self.get_identifier_kind(target_id)                
                     if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
                         Callinvite=CallInvite(CommunicationUserIdentifier(target_id))                    
                     if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
                         Callinvite=CallInvite(PhoneNumberIdentifier(target_id),sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
-                    call_back_url= self.call_configuration.app_callback_url+'/target_number=?' +target_number   
+                    call_back_url= self.call_configuration.app_callback_url 
                     Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
-                    self.call_connection_response = CallAutomationClient.create_call(self.calling_automation_client ,Callinvite,callback_uri=call_back_url)                
+                    self.call_connection_response = CallAutomationClient.create_call(self.calling_automation_client ,Callinvite,callback_uri=call_back_url)
+                    self.targets_identifiers[self.call_connection_response.call_connection.call_connection_id] = target_id;                
                     Logger.log_message(
                     Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_response.call_connection.call_connection_id)
         except Exception as ex:
@@ -67,16 +68,6 @@ class Program():
 
     async def start_callBack(self,request):
         try: 
-             target_id_comm=None
-             target_id=request.query_string
-             if(target_id and len(target_id)):
-                if(re.search(r"\s",target_id)):
-                   target_id='+'+ (target_id).lstrip() 
-                target_Identity = self.get_identifier_kind(target_id)                
-                if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
-                            target_id_comm=CommunicationUserIdentifier(target_id) 
-                if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
-                        target_id_comm=PhoneNumberIdentifier(target_id)
              _content = await request.content.read()
              event = CallAutomationEventParser.parse(_content)                        
              call_connection = self.calling_automation_client.get_call_connection(event.call_connection_id)            
@@ -84,7 +75,7 @@ class Program():
              if event.__class__ == CallConnected:
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
                                  + event.call_connection_id)
-                 recognize_options = CallMediaRecognizeDtmfOptions(target_id_comm,max_tones_to_collect=1)
+                 recognize_options = CallMediaRecognizeDtmfOptions(self.targets_identifiers[event.call_connection_id],max_tones_to_collect=1)
                  recognize_options.interrupt_prompt = True
                  recognize_options.inter_tone_timeout = 30                 
                  recognize_options.initial_silence_timeout=5 

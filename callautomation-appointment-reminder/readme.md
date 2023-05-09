@@ -9,7 +9,7 @@ products:
 
 # Appointment Reminder Call Sample
 
-This sample application shows how the Azure Communication Services Server, Calling package can be used to build IVR related solutions. This sample makes an outbound call to a phone number or a communication identifier and plays an audio message. If the callee presses 1 (tone1), to reschedule an appointment, then leaves the call.If the callee presses 2(tone2) cancell an appointment,then leave the call. If the callee presses  any other key then the application ends the call.This sample application is also capable of making multiple concurrent outbound calls.
+This sample application shows how the Azure Communication CallAutomation, Calling package can be used to build IVR related solutions. This sample makes an outbound call to a phone number or a communication identifier and plays an audio message. If the callee presses 1 (tone1), to reschedule an appointment, then leaves the call.If the callee presses 2(tone2) cancell an appointment,then leave the call. If the callee presses  any other key then the application ends the call.This sample application is also capable of making multiple concurrent outbound calls.
 The application is a console based application build using Python 3.9 and above.
 
 ## Getting started
@@ -20,10 +20,12 @@ The application is a console based application build using Python 3.9 and above.
 - [Python](https://www.python.org/downloads/) 3.9 and above
 - Create an Azure Communication Services resource. For details, see [Create an Azure Communication Resource](https://docs.microsoft.com/azure/communication-services/quickstarts/create-communication-resource). You'll need to record your resource **connection string** for this sample.
 - Get a phone number for your new Azure Communication Services resource. For details, see [Get a phone number](https://docs.microsoft.com/azure/communication-services/quickstarts/telephony-sms/get-phone-number?pivots=platform-azp)
-- Download and install  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/)
+- Download and install [VS Code](https://code.visualstudio.com/download) or  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/) 
 -[Python311](https://www.python.org/downloads/) (Make sure to install version that corresponds with your visual studio instance, 32 vs 64 bit)
 - Download and install [Ngrok](https://www.ngrok.com/download). As the sample is run locally, Ngrok will enable the receiving of all the events.
--Generate Ngrok Url by using below steps
+
+-Generate Ngrok Url by using below steps.
+
        - Open command prompt or powershell window on the machine using to run the sample.
        - Navigate to directory path where Ngrok.exe file is located. Then, run:
        - ngrok http {portNumber}(For e.g. ngrok http 8080)
@@ -47,5 +49,6 @@ The application is a console based application build using Python 3.9 and above.
 
 - Add azure communication callautomation's wheel file path in requirement.txt
 - Navigate to the directory containing the requirements.txt file and use the following commands for installing all the dependencies and for running the application respectively:
+
         - pip install -r requirements.txt
         - python program.py
