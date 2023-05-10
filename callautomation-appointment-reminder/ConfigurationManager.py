@@ -4,7 +4,7 @@ class ConfigurationManager:
     __instance = None   
 
     def __init__(self):
-        if(self.__configuration == None):            
+        if(self.__configuration == None):                       
             self.__configuration = configparser.ConfigParser()
             self.__configuration.read('config.ini')
 
@@ -27,12 +27,12 @@ class CallConfiguration:
         self.connection_string: str = str(connection_string)
         #self.source_identity: str = str(source_identity)
         self.source_phone_number: str = str(source_phone_number)
-        self.app_base_url: str = str(app_base_url)
-        self.audio_file_name: str = str(audio_file_name)
+        self.app_base_url: str = str(app_base_url) 
+        self.audio_file_name: str = str(audio_file_name)        
         self.appointment_confirmed_audio: str = str(appointment_confirmed_audio)
         self.appointment_cancelled_audio: str = str(appointment_cancelled_audio)
         self.timed_out_audio: str = str(timed_out_audio)
         self.invalid_input_audio: str = str(invalid_input_audio)
         self.event_callback_route:str = str(event_callback_route)
         self.app_callback_url: str = app_base_url + event_callback_route
-        self.audio_file_url: str =  audio_file_name
+        

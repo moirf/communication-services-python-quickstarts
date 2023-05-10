@@ -75,11 +75,11 @@ class Program():
              if event.__class__ == CallConnected:
                  Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
                                  + event.call_connection_id)
-                 recognize_options = CallMediaRecognizeDtmfOptions(self.targets_identifiers[event.call_connection_id],max_tones_to_collect=1)
+                 recognize_options = CallMediaRecognizeDtmfOptions(identifier_from_raw_id(self.targets_identifiers[event.call_connection_id]),max_tones_to_collect=1)
                  recognize_options.interrupt_prompt = True
-                 recognize_options.inter_tone_timeout = 30                 
+                 recognize_options.inter_tone_timeout = 10                 
                  recognize_options.initial_silence_timeout=5 
-                 File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_url))                 
+                 File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_name))                 
                  File_source.play_source_id= 'AppointmentReminderMenu'                 
                  recognize_options.play_prompt = File_source                
                  recognize_options.operation_context= 'AppointmentReminderMenu'             
@@ -89,20 +89,20 @@ class Program():
                                     +'Correlation id:'+event.correlation_id)
                  toneDetected=event.collect_tones_result.tones[0]
                  if toneDetected == DtmfTone.ONE:
-                     playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Confirmed_Audio))
-                     PlayOption = call_connection_media.play_to_all(playSource,content='ResponseToDtmf')
+                     play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.appointment_confirmed_audio))
+                     call_connection_media.play_to_all(play_Source,content='ResponseToDtmf')
                  elif toneDetected == DtmfTone.TWO :
-                       playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Appointment_Cancelled_Audio))
-                       PlayOption = call_connection_media.play_to_all(playSource,content='ResponseToDtmf')
+                       play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.appointment_cancelled_audio))
+                       call_connection_media.play_to_all(play_Source,content='ResponseToDtmf')
                  else:
-                     playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Invalid_Input_Audio))
-                     call_connection_media.play_to_all(playSource) 
+                     play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.invalid_input_audio))
+                     call_connection_media.play_to_all(play_Source) 
                  
              if event.__class__ == RecognizeFailed and event.operation_context == 'AppointmentReminderMenu' :
                  Logger.log_message(Logger.INFORMATION,'Recognition timed out for call connection id --> '+ event.call_connection_id
                                     +'Correlation id:'+event.correlation_id)
-                 playSource = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.Timed_out_Audio))
-                 call_connection_media.play_to_all(playSource)
+                 play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.timed_out_audio))
+                 call_connection_media.play_to_all(play_Source)
              if event.__class__ == PlayCompleted:
                      Logger.log_message(Logger.INFORMATION,'PlayCompleted event received for call connection id --> '+ event.call_connection_id
                                     +'Call Connection Properties :'+event.correlation_id)
