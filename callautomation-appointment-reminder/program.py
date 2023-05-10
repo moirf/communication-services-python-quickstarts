@@ -1,175 +1,158 @@
-import asyncio
-import nest_asyncio
-from azure.communication.identity._shared.models import CommunicationIdentifier, CommunicationUserIdentifier
-from Controller.OutboundCallController import OutboundCallController
+import re
+from azure.communication.identity._shared.models import CommunicationIdentifier,PhoneNumberIdentifier,\
+    CommunicationUserIdentifier,CommunicationIdentifierKind,identifier_from_raw_id
+import json
+from aiohttp import web
 from Logger import Logger
-from ConfigurationManager import ConfigurationManager
-from CallConfiguration import CallConfiguration
-from Ngrok.NgrokService import NgrokService
-from azure.communication.identity import CommunicationIdentityClient
-from azure.cognitiveservices.speech import AudioDataStream, SpeechConfig, SpeechSynthesizer, SpeechSynthesisOutputFormat
-from callautomation import OutboundCallReminder
+from urllib.parse import urlencode
+from ConfigurationManager import ConfigurationManager,CallConfiguration
+from azure.communication.callautomation import CallAutomationClient,CallInvite,\
+CallAutomationEventParser,CallConnected,CallMediaRecognizeDtmfOptions,\
+CallConnectionClient,CallDisconnected,PlaySource,FileSource,ParticipantsUpdated,DtmfTone,\
+RecognizeCanceled,RecognizeCompleted,RecognizeFailed,PlayCompleted,PlayFailed     
 
-
-class Program():
-
+class Program():     
+    target_number = None
+    ngrok_url = None
+    call_configuration: CallConfiguration = None
+    calling_automation_client: CallAutomationClient  = None
+    call_connection: CallConnectionClient = None
     configuration_manager = None
-    __ngrok_service = None
-    url = "http://localhost:9007"
+    user_identity_regex: str = '8:acs:[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}_[0-9a-fA-F]{8}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{4}\\-[0-9a-fA-F]{12}'
+    phone_identity_regex: str = '^\\+\\d{10,14}$'
+    
+    def get_identifier_kind(self, participantnumber: str):
+            # checks the identity type returns as string
+        if(re.search(self.user_identity_regex, participantnumber)):
+            return CommunicationIdentifierKind.COMMUNICATION_USER
+        elif(re.search(self.phone_identity_regex, participantnumber)):
+            return CommunicationIdentifierKind.PHONE_NUMBER
+        else:
+            return CommunicationIdentifierKind.UNKNOWN
+        
+    configuration_manager = ConfigurationManager.get_instance()
+    calling_automation_client = CallAutomationClient.from_connection_string(configuration_manager.get_app_settings('Connectionstring'))
+    ngrok_url =configuration_manager.get_app_settings('app_base_uri')
+    targets_identifiers= {}; 
 
     def __init__(self):
-        Logger.log_message(Logger.INFORMATION, "Starting ACS Sample App ")
-        # Get configuration properties
-        self.configuration_manager = ConfigurationManager.get_instance()
-
-    async def program(self):
-        # Start Ngrok service
-        ngrok_url = self.start_ngrok_service()
-
+        Logger.log_message(Logger.INFORMATION, 'Starting ACS Sample App ')
+        # Get configuration properties  
+        self.app = web.Application()        
+        self.app.add_routes([web.post('/api/call',self.run_sample)])
+        self.app.add_routes([web.get('/audio/{file_name}', self.load_file)])
+        self.app.add_routes([web.post('/api/callbacks',self.start_callBack)])
+        web.run_app(self.app, port=8080)
+    
+    async def run_sample(self,request):
+        self.call_configuration =self.initiate_configuration(self.ngrok_url) 
         try:
-            if (ngrok_url and len(ngrok_url)):
-                Logger.log_message(Logger.INFORMATION,
-                                   "Server started at -- > " + self.url)
-
-                run_sample = asyncio.create_task(self.run_sample(ngrok_url))
-
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(OutboundCallController())
-                await run_sample
-
-            else:
-                Logger.log_message(Logger.INFORMATION,
-                                   "Failed to start Ngrok service")
-
+            target_ids = self.configuration_manager.get_app_settings('TargetIdentity') 
+            Target_identities= target_ids.split(';')
+            for target_id in Target_identities :                       
+                if(target_id and len(target_id)):            
+                    target_Identity = self.get_identifier_kind(target_id)                
+                    if target_Identity == CommunicationIdentifierKind.COMMUNICATION_USER :                        
+                        Callinvite=CallInvite(CommunicationUserIdentifier(target_id))                    
+                    if target_Identity == CommunicationIdentifierKind.PHONE_NUMBER :                        
+                        Callinvite=CallInvite(PhoneNumberIdentifier(target_id),sourceCallIdNumber=PhoneNumberIdentifier(self.call_configuration.source_phone_number))                    
+                    call_back_url= self.call_configuration.app_callback_url 
+                    Logger.log_message(Logger.INFORMATION,'Performing CreateCall operation')
+                    self.call_connection_response = CallAutomationClient.create_call(self.calling_automation_client ,Callinvite,callback_uri=call_back_url)
+                    self.targets_identifiers[self.call_connection_response.call_connection.call_connection_id] = target_id;                
+                    Logger.log_message(
+                    Logger.INFORMATION, 'Call initiated with Call Leg id -- >' + self.call_connection_response.call_connection.call_connection_id)
         except Exception as ex:
             Logger.log_message(
-                Logger.ERROR, "Failed to start Ngrok service --> "+str(ex))
+                Logger.ERROR, 'Failure occured while creating/establishing the call. Exception -- > ' + str(ex))
 
-        Logger.log_message(Logger.INFORMATION,
-                           "Press 'Ctrl + C' to exit the sample")
-        self.__ngrok_service.dispose()
-
-    def start_ngrok_service(self):
-        try:
-            ngrokPath = self.configuration_manager.get_app_settings(
-                "NgrokExePath")
-
-            if (not(len(ngrokPath))):
-                Logger.log_message(Logger.INFORMATION,
-                                   "Ngrok path not provided")
-                return None
-
-            Logger.log_message(Logger.INFORMATION, "Starting Ngrok")
-            self.__ngrok_service = NgrokService(ngrokPath, None)
-
-            Logger.log_message(Logger.INFORMATION, "Fetching Ngrok Url")
-            ngrok_url = self.__ngrok_service.get_ngrok_url()
-
-            Logger.log_message(Logger.INFORMATION,
-                               "Ngrok Started with url -- > " + ngrok_url)
-            return ngrok_url
-
-        except Exception as ex:
-            Logger.log_message(Logger.INFORMATION,
-                               "Ngrok service got failed -- > " + str(ex))
-            return None
-
-    async def run_sample(self, app_base_url):
-        call_configuration = self.initiate_configuration(app_base_url)
-        try:
-            outbound_call_pairs = self.configuration_manager.get_app_settings(
-                "DestinationIdentities")
-
-            if (outbound_call_pairs and len(outbound_call_pairs)):
-                identities = outbound_call_pairs.split(";")
-                tasks = []
-                for identity in identities:
-                    pair = identity.split(",")
-                    task = asyncio.ensure_future(OutboundCallReminder(
-                        call_configuration).report(pair[0].strip(), pair[1].strip()))
-                    tasks.append(task)
-
-                _ = await asyncio.gather(*tasks)
-
+    async def start_callBack(self,request):
+        try: 
+             _content = await request.content.read()
+             event = CallAutomationEventParser.parse(_content)                        
+             call_connection = self.calling_automation_client.get_call_connection(event.call_connection_id)            
+             call_connection_media =call_connection.get_call_media()            
+             if event.__class__ == CallConnected:
+                 Logger.log_message(Logger.INFORMATION,'CallConnected event received for call connection id --> ' 
+                                 + event.call_connection_id)
+                 recognize_options = CallMediaRecognizeDtmfOptions(identifier_from_raw_id(self.targets_identifiers[event.call_connection_id]),max_tones_to_collect=1)
+                 recognize_options.interrupt_prompt = True
+                 recognize_options.inter_tone_timeout = 10                 
+                 recognize_options.initial_silence_timeout=5 
+                 File_source=FileSource(uri=(self.call_configuration.app_base_url + self.call_configuration.audio_file_name))                 
+                 File_source.play_source_id= 'AppointmentReminderMenu'                 
+                 recognize_options.play_prompt = File_source                
+                 recognize_options.operation_context= 'AppointmentReminderMenu'             
+                 call_connection_media.start_recognizing(recognize_options)
+             if event.__class__ == RecognizeCompleted and event.operation_context == 'AppointmentReminderMenu' :
+                 Logger.log_message(Logger.INFORMATION,'RecognizeCompleted event received for call connection id --> '+ event.call_connection_id
+                                    +'Correlation id:'+event.correlation_id)
+                 toneDetected=event.collect_tones_result.tones[0]
+                 if toneDetected == DtmfTone.ONE:
+                     play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.appointment_confirmed_audio))
+                     call_connection_media.play_to_all(play_Source,content='ResponseToDtmf')
+                 elif toneDetected == DtmfTone.TWO :
+                       play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.appointment_cancelled_audio))
+                       call_connection_media.play_to_all(play_Source,content='ResponseToDtmf')
+                 else:
+                     play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.invalid_input_audio))
+                     call_connection_media.play_to_all(play_Source) 
+                 
+             if event.__class__ == RecognizeFailed and event.operation_context == 'AppointmentReminderMenu' :
+                 Logger.log_message(Logger.INFORMATION,'Recognition timed out for call connection id --> '+ event.call_connection_id
+                                    +'Correlation id:'+event.correlation_id)
+                 play_Source = FileSource(uri=(self.call_configuration.app_base_url+self.call_configuration.timed_out_audio))
+                 call_connection_media.play_to_all(play_Source)
+             if event.__class__ == PlayCompleted:
+                     Logger.log_message(Logger.INFORMATION,'PlayCompleted event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_connection.hang_up(True)
+             if event.__class__ == PlayFailed:
+                     Logger.log_message(Logger.INFORMATION,'PlayFailed event received for call connection id --> '+ event.call_connection_id
+                                    +'Call Connection Properties :'+event.correlation_id)
+                     call_connection.hang_up(True)            
+             if event.__class__ == ParticipantsUpdated :
+                 Logger.log_message(Logger.INFORMATION,'Participants Updated --> ')
+             if event.__class__ == CallDisconnected :
+                 Logger.log_message(Logger.INFORMATION,'Call Disconnected event received for call connection id --> ' 
+                                 + event.call_connection_id) 
+                 
         except Exception as ex:
             Logger.log_message(
-                Logger.ERROR, "Failed to initiate the outbound call Exception -- > " + str(ex))
-
-        self.delete_user(call_configuration.connection_string,
-                         call_configuration.source_identity)
-
-        # <summary>
+                Logger.ERROR, 'Failed to get recognize Options . --> ' + str(ex))
+            
+          
+     # <summary>
         # Fetch configurations from App Settings and create source identity
         # </summary>
-        # <param name="app_base_url">The base url of the app.</param>
+        # <param name='app_base_url'>The base url of the app.</param>
         # <returns>The <c CallConfiguration object.</returns>
 
     def initiate_configuration(self, app_base_url):
-        connection_string = self.configuration_manager.get_app_settings(
-            "Connectionstring")
-        source_phone_number = self.configuration_manager.get_app_settings(
-            "SourcePhone")
+        try:
+            connection_string = self.configuration_manager.get_app_settings('connectionstring')
+            source_phone_number = self.configuration_manager.get_app_settings('Sourcephone')
+            event_callback_route=self.configuration_manager.get_app_settings('eventcallbackroute')
+            audio_file_name = self.configuration_manager.get_app_settings('appointmentremindermenuaudio')
+            appointment_confirmed_audio = self.configuration_manager.get_app_settings('appointmentconfirmedaudio')
+            appointment_cancelled_audio = self.configuration_manager.get_app_settings('appointmentcancelledaudio')
+            timed_out_audio = self.configuration_manager.get_app_settings('timedoutaudio')
+            invalid_input_audio = self.configuration_manager.get_app_settings('invalidinputaudio')
 
-        source_identity = self.create_user(connection_string)
-        audio_file_name = self.generate_custom_audio_message()
-
-        return CallConfiguration(connection_string, source_identity, source_phone_number, app_base_url, audio_file_name)
-
+            return CallConfiguration(connection_string, source_phone_number, app_base_url, 
+                                     audio_file_name,event_callback_route,appointment_confirmed_audio,
+                                     appointment_cancelled_audio,timed_out_audio,invalid_input_audio)
+        except Exception as ex:
+            Logger.log_message(
+                Logger.ERROR, 'Failed to CallConfiguration. Exception -- > ' + str(ex))
+       
     # <summary>
     # Get .wav Audio file
     # </summary>
-
-    def generate_custom_audio_message(self):
-        configuration_manager = ConfigurationManager()
-        key = configuration_manager.get_app_settings("CognitiveServiceKey")
-        region = configuration_manager.get_app_settings(
-            "CognitiveServiceRegion")
-        custom_message = configuration_manager.get_app_settings(
-            "CustomMessage")
-
-        try:
-            if (key and len(key) and region and len(region) and custom_message and len(custom_message)):
-
-                config = SpeechConfig(subscription=key, region=region)
-                config.set_speech_synthesis_output_format(
-                    SpeechSynthesisOutputFormat["Riff24Khz16BitMonoPcm"])
-
-                synthesizer = SpeechSynthesizer(SpeechSynthesizer=config)
-
-                result = synthesizer.speak_text_async(custom_message).get()
-                stream = AudioDataStream(result)
-                stream.save_to_wav_file("/audio/custom-message.wav")
-
-                return "custom-message.wav"
-
-            return "sample-message.wav"
-        except Exception as ex:
-            Logger.log_message(
-                Logger.ERROR, "Exception while generating text to speech, falling back to sample audio. Exception -- > " + str(ex))
-            return "sample-message.wav"
-
-    # <summary>
-    # Create new user
-    # </summary>
-
-    def create_user(self, connection_string):
-        client = CommunicationIdentityClient.from_connection_string(
-            connection_string)
-        user: CommunicationIdentifier = client.create_user()
-        return user.properties.get('id')
-
-    # <summary>
-    # Delete the user
-    # </summary>
-
-    def delete_user(self, connection_string, source):
-        client = CommunicationIdentityClient.from_connection_string(
-            connection_string)
-        user = CommunicationUserIdentifier(source)
-        client.delete_user(user)
-
-
-if __name__ == "__main__":
-    nest_asyncio.apply()
-    obj = Program()
-    asyncio.run(obj.program())
+    async def load_file(self, request):
+        file_name = request.match_info.get('file_name', 'Anonymous')
+        resp = web.FileResponse(f'Audio/{file_name}')
+        return resp
+    
+if __name__ == '__main__':
+    Program()

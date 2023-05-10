@@ -4,13 +4,13 @@ languages:
 - python
 products:
 - azure
-- azure-communication-services
+- azure-communication-CallAutomation
 ---
 
-# Outbound Reminder Call Sample
+# Appointment Reminder Call Sample
 
-This sample application shows how the Azure Communication Services Server, Calling package can be used to build IVR related solutions. This sample makes an outbound call to a phone number or a communication identifier and plays an audio message. If the callee presses 1 (tone1), to reschedule an appointment, then the application invites a new participant and then leaves the call. If the callee presses any other key then the application ends the call. This sample application is also capable of making multiple concurrent outbound calls.
-The application is a console based application build using Python 3.9.
+This sample application shows how the Azure Communication CallAutomation, Calling package can be used to build IVR related solutions. This sample makes an outbound call to a phone number or a communication identifier and plays an audio message. If the callee presses 1 (tone1), to reschedule an appointment, then leaves the call.If the callee presses 2(tone2) cancell an appointment,then leave the call. If the callee presses  any other key then the application ends the call.This sample application is also capable of making multiple concurrent outbound calls.
+The application is a console based application build using Python 3.9 and above.
 
 ## Getting started
 
@@ -20,33 +20,32 @@ The application is a console based application build using Python 3.9.
 - [Python](https://www.python.org/downloads/) 3.9 and above
 - Create an Azure Communication Services resource. For details, see [Create an Azure Communication Resource](https://docs.microsoft.com/azure/communication-services/quickstarts/create-communication-resource). You'll need to record your resource **connection string** for this sample.
 - Get a phone number for your new Azure Communication Services resource. For details, see [Get a phone number](https://docs.microsoft.com/azure/communication-services/quickstarts/telephony-sms/get-phone-number?pivots=platform-azp)
+- Download and install [VS Code](https://code.visualstudio.com/download) or  [Visual Studio (2022 v17.4.0 and above)](https://visualstudio.microsoft.com/vs/) 
+-[Python311](https://www.python.org/downloads/) (Make sure to install version that corresponds with your visual studio instance, 32 vs 64 bit)
 - Download and install [Ngrok](https://www.ngrok.com/download). As the sample is run locally, Ngrok will enable the receiving of all the events.
-- Download and install  [Visual C++](https://support.microsoft.com/en-us/topic/the-latest-supported-visual-c-downloads-2647da03-1eea-4433-9aff-95f26a218cc0)
-- (Optional) Create Azure Speech resource for generating custom message to be played by application. Follow [here](https://docs.microsoft.com/azure/cognitive-services/speech-service/overview#try-the-speech-service-for-free) to create the resource.
+- Generate Ngrok Url by using below steps.
+    - Open command prompt or powershell window on the machine using to run the sample.
+    - Navigate to directory path where Ngrok.exe file is located. Then, run:
+    - ngrok http {portNumber}(For e.g. ngrok http 8080)
+    - Get Ngrok Url generated. Ngrok Url will be in the form of e.g. "https://95b6-43-230-212-228.ngrok-free.app"
 
-> Note: the samples make use of the Microsoft Cognitive Services Speech SDK. By downloading the Microsoft Cognitive Services Speech SDK, you acknowledge its license, see [Speech SDK license agreement](https://aka.ms/csspeech/license201809).
+### Before running the sample for the first time
+
+ -Open an instance of PowerShell, Windows Terminal, Command Prompt or equivalent and navigate to  the    directory that you would like to clone the sample to.
+ -git clone "https://github.com/moirf/communication-services-python-quickstarts".
+ Navigate to call-automation-appointment-reminder folder.
 
 ### Configuring application
 
 - Open the config.ini file to configure the following settings
-
-	- Connection String: Azure Communication Service resource's connection string.
-	- Source Phone: Phone number associated with the Azure Communication Service resource.
-	- DestinationIdentities: Multiple sets of outbound target and Transfer target. These sets are seperated by a semi-colon, and outbound target and Transfer target in a each set are seperated by a coma.
-
-    	Format: "OutboundTarget1(PhoneNumber),TransferTarget1(PhoneNumber/MRI);OutboundTarget2(PhoneNumber),TransferTarget2(PhoneNumber/MRI);OutboundTarget3(PhoneNumber),TransferTarget3(PhoneNumber/MRI)".
-
-	  	For e.g. "+1425XXXAAAA,8:acs:ab12b0ea-85ea-4f83-b0b6-84d90209c7c4_00000009-bce0-da09-54b7-xxxxxxxxxxxx;+1425XXXBBBB,+1425XXXCCCC"
-
-	- NgrokExePath: Folder path where ngrok.exe is insalled/saved.
-	- SecretPlaceholder: Secret/Password that would be part of callback and will be use to validate incoming requests.
-	- CognitiveServiceKey: (Optional) Cognitive service key used for generating custom message
-	- CognitiveServiceRegion: (Optional) Region associated with cognitive service
-	- CustomMessage: (Optional) Text for the custom message to be converted to speech.
+- Connection String: Azure Communication Service resource's connection string.
+- Source Phone: Phone number associated with the Azure Communication Service resource.
+- target Identity: Multiple sets of outbound target and Transfer target. These sets are seperated by a semi-colon, and outbound target and Transfer target in a each set are seperated by a coma.
+-App_base_uri: Base url of the app. (For local development replace the Ngrok url.For e.g. "https://95b6-43-230-212-228.ngrok-free.app")  
 
 ### Run the Application
 
-- Add azure communication callingserver's wheel file path in requirement.txt
+- Add azure communication callautomation's wheel file path in requirement.txt
 - Navigate to the directory containing the requirements.txt file and use the following commands for installing all the dependencies and for running the application respectively:
-	- pip install -r requirements.txt
-	- python program.py
+     - pip install -r requirements.txt
+     - python program.py
